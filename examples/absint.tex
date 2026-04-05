@@ -1,0 +1,20 @@
+\input{_common-preamble.tex}
+\usepackage{mathtools}
+\usepackage{../absint}
+
+\begin{document}
+Hey! This is: \absintmark{lor}\absexpr{\lor}. \absintmark{iff}\absexpr{\iff}.
+
+\absexpr{a \lor b \asdef\iff c \eq 3 \asdef\eq 4}\\
+\(a \lor b \iff c\)
+
+Lattice: A lattice \absexpr{(X, \sqsubseteq, \sqcup, \sqcap)} is a poset (partially ordered set), such that \absexpr{\forall a, b \in X: a \sqcup b} and \absexpr{a \sqcap b} exist (Mine).
+
+Complete Lattice: A complete lattice \absexpr{(X, \sqsubseteq, \sqcup, \sqcap, \bot, \top)} is a lattice, such that
+\begin{enumerate}[nosep]
+   \item \absexpr{\forall S \subseteq X: \bigsqcup S} and \absexpr{\bigsqcap S} exist.
+   \item \absexpr{X} has a least element \absexpr{\bot} and a greatest element \absexpr{\top}.
+\end{enumerate}
+
+For any set \absexpr{X}, the powerset \absexpr{(\powerset(X), \subseteq, \cup, \cap, \emptyset, X)} is a complete lattice.
+\end{document}

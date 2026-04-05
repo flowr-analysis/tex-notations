@@ -1,5 +1,5 @@
 # used by the l3build system
-build/
+**/build/
 *-SAVE-ERROR
 example.pdf
 
