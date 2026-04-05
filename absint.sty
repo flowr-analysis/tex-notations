@@ -14,7 +14,11 @@
 \def\absint@asfont#1{\mathsf{#1}}
 \def\absint@symbol#1{\absint@reflab{sym:#1}{\absintstyle{\csname#1\endcsname}}}
 % promote conventional math symbol to absint symbol
-\def\absint@lift#1{\csletcs{\absint@#1}{#1}\csdef{#1}{\absint@symbol{\absint@#1}}}
+\def\absint@lift@as#1#2{\csletcs{\absint@#1}{#1}\csdef{#1}{#2{\absint@symbol{\absint@#1}}}}
+\def\absint@lift#1{\absint@lift@as{#1}\mathord}
+\def\absint@liftbin#1{\absint@lift@as{#1}\mathbin}
+\def\absint@liftrel#1{\absint@lift@as{#1}\mathrel}
+\def\absint@liftop#1{\absint@lift@as{#1}\mathop}
 
 % TODO: allow to define a marginnote entry/gls link for these symbols!
 % TODO: allow to register user defined symbols?
@@ -27,9 +31,12 @@
 \def\eq{=}\let\emptyset\varnothing\let\union\cup\let\intersect\cap\let\bigunion\bigcup\let\bigintersect\bigcap%
 \def\powerset{\mathcal{P}}\let\P\powerset\let\compose\circ\def\Set##1{\bgroup\def\For{\;\middle|\;}\let\Given\For\left\{\,##1\,\right\}\egroup}%
 \def\N{\mathbb{N}}\def\Z{\mathbb{Z}}\def\Q{\mathbb{Q}}\def\R{\mathbb{R}}\def\C{\mathbb{C}}\def\Bool{\mathbb{2}}\def\Universe{\mathbb{U}}\def\Variables{\mathbb{V}}\def\NumericDomain{\mathbb{I}}\def\AnyOp{\diamond}\def\AnyCompare{\bowtie}\def\BooleanDomain{\mathbb{B}}%
-\let\partof\sqsubseteq\let\strictpartof\sqsubset\let\intadd\oplus\let\intmul\otimes\let\intneg\ominus\let\intdiv\oslash\let\intmod\odot\def\lub{\sqcup\,}\def\glb{\sqcap\,}\def\Lub{\bigsqcup}\def\Glb{\bigsqcap}\def\Environments{\mathcal{E}}\def\Environment{\rho}\def\RawEvaluateExpr{\mathbb{E}}\def\EvaluateExpr##1{\RawEvaluateExpr\llbracket\,##1\,\rrbracket}\def\RawEvaluateCond{\mathbb{C}}\def\EvaluateCond##1{\RawEvaluateCond\llbracket\,##1\,\rrbracket}\def\widen{\nabla}%
+\let\partof\sqsubseteq\let\strictpartof\sqsubset\let\intadd\oplus\let\intmul\otimes\let\intneg\ominus\let\intdiv\oslash\let\intmod\odot\def\lub{\sqcup\,}\def\glb{\sqcap}\def\Lub{\bigsqcup}\def\Glb{\bigsqcap}\def\Environments{\mathcal{E}}\def\Environment{\rho}\def\RawEvaluateExpr{\mathbb{E}}\def\EvaluateExpr##1{\RawEvaluateExpr\llbracket\,##1\,\rrbracket}\def\RawEvaluateCond{\mathbb{C}}\def\EvaluateCond##1{\RawEvaluateCond\llbracket\,##1\,\rrbracket}\def\widen{\nabla}%
 \def\RawEvaluateStatement{\mathbb{S}}\def\EvaluateStatement##1{\RawEvaluateStatement\llbracket\,##1\,\rrbracket}\def\SetOfStates{\mathcal{D}}\def\isAbstract{^\#}%
-\@for\@temp:=lor,land,lnot,iff,implies,eq,emptyset,union,intersect,bigunion,bigintersect,cup,cap,bigcup,bigcap,subset,subseteq,setminus,powerset,in,times,supset,supseteq,leq,le,ge,geq,ni,sqsubset,sqsubseteq,sqsupseteq,sqsupset,to,mapsto,compose,N,Z,Q,R,C,Bool,Universe,top,bot,forall,exists,sqcup,bigsqcup,sqcap,bigsqcap,partof,strictpartof,RawEvaluate\do{\expandafter\absint@lift\expandafter{\@temp}}%
+\@for\@temp:=union,intersect,cup,cap,setminus,times,lor,land,sqcup,sqcap,compose\do{\expandafter\absint@liftbin\expandafter{\@temp}}%
+\@for\@temp:=subset,subseteq,in,supset,supseteq,leq,le,ge,geq,ni,sqsubset,sqsubseteq,sqsupseteq,sqsupset,to,mapsto,iff,implies,eq,partof,strictpartof\do{\expandafter\absint@liftrel\expandafter{\@temp}}%
+\@for\@temp:=bigunion,bigintersect,bigcup,bigcap,bigsqcup,bigsqcap,forall,exists\do{\expandafter\absint@liftop\expandafter{\@temp}}%
+\@for\@temp:=lnot,emptyset,powerset,N,Z,Q,R,C,Bool,Universe,top,bot,RawEvaluate\do{\expandafter\absint@lift\expandafter{\@temp}}%
 }
 \def\endabsint{\endgroup}
 \def\absexpr#1{\ensuremath{\absint#1\endabsint}}
