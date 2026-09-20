@@ -15,8 +15,6 @@
 \RequirePackage{graphicx}% \rotatebox, for the \bigsqcap fallback
 \RequirePackage{xcolor}%  \color and \mathcolor
 
-%%% Options %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 \newif\ifabsint@colored  \absint@coloredtrue
 \newif\ifabsint@links    \absint@linkstrue
 \newif\ifabsint@track    \absint@tracktrue
@@ -51,8 +49,8 @@
   plain       .default:n = true
 }
 
-%% A math group with \color is a lot cheaper than \mathcolor; the latter is
-%% only needed to colour the scripts that follow a symbol (`mathcolor').
+%% \mathcolor is only needed to colour the scripts after a symbol, and costs
+%% about a fifth of the runtime; a math group with \color does not.
 \newcommand*\absint@docolor[1]{%
   \ifabsint@mathcolor
     \expandafter\absint@mathcolor@\else\expandafter\absint@plaincolor@\fi{#1}}
@@ -69,14 +67,11 @@
 \newcommand*\absint@lbrack{[\mkern-3.2mu[}
 \newcommand*\absint@rbrack{]\mkern-3.2mu]}
 
-%% \bigsqcap exists in stmaryrd and friends only; otherwise turn a \bigsqcup
-%% upside down.
+%% \bigsqcap exists in stmaryrd and friends only; otherwise turn \bigsqcup over.
 \newcommand*\absint@bigsqcap@[2]{%
   \vcenter{\hbox{\rotatebox[origin=c]{180}{$\m@th#1\bigsqcup$}}}}
 \newcommand*\absint@bigsqcap{\mathop{\mathpalette\absint@bigsqcap@\relax}}
 
-%% \absint@stack{<upper>}{<lower>}: two symbols above each other, in the
-%% current style and centred on the math axis.
 \newcommand*\absint@stack[2]{\mathpalette{\absint@stack@{#1}{#2}}\relax}
 \newcommand*\absint@stack@[4]{%
   \vcenter{\m@th\baselineskip\z@skip\lineskip.2ex\lineskiplimit\maxdimen
@@ -90,16 +85,9 @@
     \fi}%
   \ifabsint@links\ifcsname hyperref\endcsname\else\absint@linksfalse\fi\fi}
 
-%%% Registry %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% Per symbol <n> we store its rendering \absint@code@<n>, its abstract
-%% rendering \absint@abs@<n>, its math class \absint@class@<n>, the symbol
-%% owning its cross reference target \absint@ref@<n>, its description
-%% \absint@desc@<n> and, for lifted symbols, the meaning \<n> had when it was
-%% declared, \absint@orig@<n>.
-
 \newcommand*\absint@symbols{}
 \newcommand*\absint@commands{}
-\newif\ifabsint@ready % has the notation been installed yet?  (see `Names')
+\newif\ifabsint@ready % is the notation installed yet?
 
 \DeclareKeys[absint/symbol]{
   class    .store = \absint@sym@class ,
@@ -112,8 +100,6 @@
   \edef\absint@tmp@{\noexpand\DeclareKeys[absint/symbol]%
     {\absint@tmp .meta:n = {class=\absint@tmp}}}\absint@tmp@}
 
-%% \DeclareAbsintSymbol{<name>}{<meaning>}[<options>], an empty <meaning>
-%% lifting the current meaning of \<name>.
 \NewDocumentCommand\DeclareAbsintSymbol{mmO{}}{%
   \def\absint@sym@class{ord}\def\absint@sym@abs{}\absint@sym@sharpfalse
   \def\absint@sym@alias{}\def\absint@sym@desc{}%
@@ -155,8 +141,6 @@
 \newcommand*\absint@twice[1]{%
   \PackageWarning{absint}{`#1' is declared twice, using the new one}}
 
-%% \DeclareAbsintAlias{<alias>}{<name>}: a second spelling, sharing the
-%% rendering and the cross reference target of <name>.
 \newcommand*\DeclareAbsintAlias[2]{%
   \ifcsdef{absint@code@#2}{%
     \ifcsdef{absint@code@#1}{\absint@twice{#1}}{\listgadd\absint@symbols{#1}}%
@@ -167,9 +151,6 @@
   }{\PackageError{absint}{Cannot alias the unknown symbol `#2'}%
      {Declare `#2' with \string\DeclareAbsintSymbol\space first.}}}
 
-%% \DeclareAbsintCommand[<options>]{<name>}[<n>][<default>]{<body>}:
-%% \newcommand for a command that only exists inside absint notation.  The
-%% options are `desc' and `demo', an example used by \absintcommands.
 \DeclareKeys[absint/command]{
   desc .store = \absint@c@desc ,
   demo .store = \absint@c@demo
@@ -183,12 +164,10 @@
   \ifabsint@ready\absint@installcmd@{#2}\fi
   \expandafter\DeclareRobustCommand\csname absint@cmd@#2\endcsname}
 
-%%% Rendering %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% The math class is restored explicitly because the styling and the link
-%% would otherwise turn every symbol into an Ord atom and ruin its spacing.
-
-\newif\ifabsint@abstract   % are we in the abstract world?
-\newif\ifabsint@rendering  % guard against nested styling and linking
+%% Restoring the math class explicitly: styling and linking would otherwise
+%% turn every symbol into an Ord atom and ruin its spacing.
+\newif\ifabsint@abstract
+\newif\ifabsint@rendering % guards against nested styling and linking
 
 \newcommand*\absint@use[1]{%
   \ifabsint@rendering\csuse{absint@code@#1}\else\absint@render{#1}\fi}
@@ -199,8 +178,8 @@
 \newcommand*\absint@payload[1]{%
   \ifabsint@abstract\csuse{absint@abs@#1}\else\csuse{absint@code@#1}\fi}
 
-%% \absint@activation is compiled once (see `Names'), so entering the
-%% notation costs a fixed list of assignments and nothing else.
+%% \absint@activation is compiled once, so entering the notation costs a
+%% fixed list of assignments and nothing else.
 \DeclareRobustCommand*\absint{\begingroup\absint@activation}
 \def\endabsint{\endgroup}% \newcommand refuses \end... names
 \DeclareRobustCommand*\absexpr[1]{\ensuremath{\absint#1\endabsint}}
@@ -208,10 +187,7 @@
   \ifcsdef{absint@code@#1}{\ensuremath{\absint@use{#1}}}{\absint@unknown{#1}}}
 \newcommand*\absint@unknown[1]{\PackageWarning{absint}{Unknown symbol `#1'}}
 
-%%% Cross references %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% A symbol only turns into a link if its target really exists, which is what
-%% keeps the undefined reference warnings away.
-
+%% Only link a symbol whose target really exists: no undefined references.
 \newcommand*\absint@labelof[1]{\absint@labelprefix\csuse{absint@ref@#1}}
 \newcommand*\absint@link[2]{%
   \ifabsint@links
@@ -224,17 +200,17 @@
     \ifcsdef{absint@marked@#1}{\PackageWarning{absint}{`#1' is marked twice}}{}%
     \absint@mark@@{#1}%
   }{\absint@unknown{#1}}}
-%% the same, but silently skipping symbols that already have a target: this
-%% is what \absintlegend uses, so a hand placed \absintmark always wins
+%% \absintlegend skips symbols that already have a target, so a hand placed
+%% \absintmark always wins
 \newcommand*\absint@markonce[1]{\ifcsdef{absint@marked@#1}{}{\absint@mark@@{#1}}}
 \newcommand*\absint@mark@@[1]{%
   \csgdef{absint@marked@#1}{}%
   \@bsphack\ifcsname phantomsection\endcsname\phantomsection\fi
   \label{\absint@labelof{#1}}\@esphack}
 
-%% Used symbols are collected globally and written out in one go at the end,
-%% since writing them where they occur would lose every symbol rendered in a
-%% box that is only measured and thrown away -- as amsmath does in \overset.
+%% Collected globally and written out in one go at the end: writing them where
+%% they occur loses every symbol rendered in a box that is only measured and
+%% thrown away -- as amsmath does in \overset.
 \newcommand*\absint@written{}
 \newcommand*\absint@@used[1]{\csgdef{absint@known@#1}{}}
 \newcommand*\absint@track[1]{%
@@ -261,13 +237,9 @@
     \fi
   \fi}
 
-%%% Legend %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% \absintlegend lists the notation used in the document, \absintlegend* all
-%% of it, and both place the cross reference targets on the way.
-
 \newcommand*\absintlegendstart{\begin{description}}
 \newcommand*\absintlegendstop{\end{description}}
-\newcommand*\absintlegendempty{}% nothing to list, e.g. on the very first run
+\newcommand*\absintlegendempty{}% nothing to list, e.g. on the first run
 \newcommand*\absintlegendentry[4]{% symbol, name, description, aliases
   \item[#1] #2\ifblank{#3}{}{ --- #3}\ifblank{#4}{}{ \textup{(also #4)}}}
 
@@ -307,8 +279,6 @@
     \forlistcsloop\do{absint@aliases@#1}%
   \endgroup}
 
-%% \absintcommands lists the commands, reusing the legend hooks: the
-%% rendered example, the name, the description and the source of the example.
 \newcommand*\absintdemo[1]{\texttt{#1}}
 \newcommand*\absintcommands{%
   \begingroup
@@ -324,7 +294,6 @@
     {\csuse{absint@cdesc@#1}}{\absint@showdemo{#1}}}
 \newcommand*\absint@showdemo[1]{\absintdemo{\csuse{absint@csrc@#1}}}
 
-%% for documents that want to walk the notation themselves
 \newcommand*\absintforallsymbols[1]{\forlistloop#1\absint@symbols}
 \newcommand*\absintforallcommands[1]{\forlistloop#1\absint@commands}
 \newcommand*\absintapi{%
@@ -335,10 +304,8 @@
   absintforallcommands,DeclareAbsintSymbol,DeclareAbsintAlias,%
   DeclareAbsintCommand}
 
-%%% Concrete and abstract %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% \begingroup is used on purpose: unlike {...} it does not turn the content
-%% into an Ord atom, so the spacing of the relations inside stays intact.
-
+%% \begingroup on purpose: unlike {...} it does not turn the content into an
+%% Ord atom, so the spacing of the relations inside stays intact.
 \DeclareAbsintCommand[desc={switch to the abstract world},
   demo={\abstractly{a \lub b}}]{abstractly}[1]{%
     \begingroup\absint@abstracttrue#1\endgroup}
@@ -353,8 +320,6 @@
   {abstract}[1]{{#1}\absint@cmd@isAbstract}
 \DeclareAbsintCommand[desc={mark one object as concrete}, demo={\concrete{X}}]%
   {concrete}[1]{{#1}\absint@cmd@isConcrete}
-
-%%% The notation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Logic
 \DeclareAbsintSymbol {lnot}     {}                 [desc={negation}, aliases={neg}]
@@ -491,8 +456,6 @@
   demo={\galoisbetween{\Z}{\NumericDomain}}]%
   {galoisbetween}[2]{#1\absint@use{galois}#2}
 
-%%% Lambda calculus %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 \DeclareAbsintSymbol {lambda}   {}                 [desc={abstraction}]
 \DeclareAbsintSymbol {tylam}    {\Lambda}          [desc={type abstraction}]
 \DeclareAbsintSymbol {app}      {\,}               [desc={application}]
@@ -546,15 +509,10 @@
 \DeclareAbsintCommand[desc={a context with its hole filled},
   demo={\ctxfill{C}{M}}]{ctxfill}[2]{#1[#2]}
 
-%%% Names %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% Every name is made available in one of two ways.  A name that is still
-%% free at the beginning of the document is defined globally (`stubs'), which
-%% also makes \lub and friends work in plain math mode and lets the notation
-%% survive a moving argument -- without it \absexpr{\Glb S} in a \section
-%% would expand \Glb while it is written to the .toc file.  A name that is
-%% taken is compiled into \absint@activation instead, so that only \absexpr
-%% and the absint environment see it.
-
+%% A free name is defined globally (`stubs'), which also makes \lub work in
+%% plain math mode and lets the notation survive a moving argument -- without
+%% it \absexpr{\Glb S} in a \section expands \Glb into the .toc file.  A taken
+%% name goes into \absint@activation, so that only \absexpr sees it.
 \newcommand*\absint@activation{}
 
 \newcommand*\absint@stub@[1]{%
@@ -575,8 +533,6 @@
     {\absint@stubcmd@{#1}}%
     {\absint@compile{#1}{\expandafter\noexpand\csname absint@cmd@#1\endcsname}}}
 
-%% \absint@compile{<name>}{<meaning>}: append \def\<name>{<meaning>} to
-%% \absint@activation, with the control sequence built once and for all.
 \newcommand*\absint@compile[2]{%
   \begingroup\edef\absint@x{\endgroup
     \noexpand\gappto\noexpand\absint@activation{%
