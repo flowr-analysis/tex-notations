@@ -1,45 +1,602 @@
-% Florian Sihler, 2024
-% Licensed under MIT License
-% https://opensource.org/licenses/MIT
-\NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{absint}[2024/12/08 Florian Sihler - Notation for Abstract Interpretation]
+%%% absint.sty --- notation for abstract interpretation
+%% Copyright (C) 2024--2026 Florian Sihler, MIT License
+%% Manual: doc/absint.tex   Examples: examples/absint.tex
+%%
+%% Inside \absexpr{...} and the absint environment the notation takes over;
+%% outside of them nothing is ever redefined.  Names that are still free are
+%% additionally defined for plain math mode, see the `stubs' option.
+\NeedsTeXFormat{LaTeX2e}[2022/06/01]
+\ProvidesPackage{absint}[2026/09/20 v2.0 Notation for Abstract Interpretation]
 
-\RequirePackage{amssymb}
+\RequirePackage{amsmath}
+\@ifundefined{varnothing}{\RequirePackage{amssymb}}{}% clashes with newtx & co.
+\@ifundefined{mathbb}{\RequirePackage{amsfonts}}{}
+\RequirePackage{etoolbox}
+\RequirePackage{graphicx}% \rotatebox, for the \bigsqcap fallback
+\RequirePackage{xcolor}%  \color and \mathcolor
 
-% to allow to switch to hyperlink/hypertarget etc.
-\def\absint@label{\phantomsection\label}
-\def\absint@reflab#1#2{\hyperref[#1]{#2}}
-\def\absintstyle#1{\mathcolor{purple}{#1}}
-\def\absint@{absint@}
-\def\absint@asfont#1{\mathsf{#1}}
-\def\absint@symbol#1{\absint@reflab{sym:#1}{\absintstyle{\csname#1\endcsname}}}
-% promote conventional math symbol to absint symbol
-\def\absint@lift@as#1#2{\csletcs{\absint@#1}{#1}\csdef{#1}{#2{\absint@symbol{\absint@#1}}}}
-\def\absint@lift#1{\absint@lift@as{#1}\mathord}
-\def\absint@liftbin#1{\absint@lift@as{#1}\mathbin}
-\def\absint@liftrel#1{\absint@lift@as{#1}\mathrel}
-\def\absint@liftop#1{\absint@lift@as{#1}\mathop}
+%%% Options %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% TODO: allow to define a marginnote entry/gls link for these symbols!
-% TODO: allow to register user defined symbols?
+\newif\ifabsint@colored  \absint@coloredtrue
+\newif\ifabsint@links    \absint@linkstrue
+\newif\ifabsint@track    \absint@tracktrue
+\newif\ifabsint@stubs    \absint@stubstrue
 
-\def\absintmark#1{\absint@label{sym:\absint@#1}}
-% activate absint notation
-\def\absint{%
-\begingroup
-\def\asdef{\overset{\absintstyle{\absint@asfont{def}}}}%
-\def\eq{=}\let\emptyset\varnothing\let\union\cup\let\intersect\cap\let\bigunion\bigcup\let\bigintersect\bigcap%
-\def\powerset{\mathcal{P}}\let\P\powerset\let\compose\circ\def\Set##1{\bgroup\def\For{\;\middle|\;}\let\Given\For\left\{\,##1\,\right\}\egroup}%
-\def\N{\mathbb{N}}\def\Z{\mathbb{Z}}\def\Q{\mathbb{Q}}\def\R{\mathbb{R}}\def\C{\mathbb{C}}\def\Bool{\mathbb{2}}\def\Universe{\mathbb{U}}\def\Variables{\mathbb{V}}\def\NumericDomain{\mathbb{I}}\def\AnyOp{\diamond}\def\AnyCompare{\bowtie}\def\BooleanDomain{\mathbb{B}}%
-\let\partof\sqsubseteq\let\strictpartof\sqsubset\let\intadd\oplus\let\intmul\otimes\let\intneg\ominus\let\intdiv\oslash\let\intmod\odot\def\lub{\sqcup}\def\glb{\sqcap}\def\Lub{\bigsqcup}\def\Glb{\bigsqcap}\def\Environments{\mathcal{E}}\def\Environment{\rho}\def\RawEvaluateExpr{\mathbb{E}}\def\EvaluateExpr##1{\RawEvaluateExpr\llbracket\,##1\,\rrbracket}\def\RawEvaluateCond{\mathbb{C}}\def\EvaluateCond##1{\RawEvaluateCond\llbracket\,##1\,\rrbracket}\def\widen{\nabla}%
-\def\RawEvaluateStatement{\mathbb{S}}\def\EvaluateStatement##1{\RawEvaluateStatement\llbracket\,##1\,\rrbracket}\def\SetOfStates{\mathcal{D}}\def\isAbstract{^\#}%
-\@for\@temp:=union,intersect,cup,cap,setminus,times,lor,land,sqcup,sqcap,compose\do{\expandafter\absint@liftbin\expandafter{\@temp}}%
-\@for\@temp:=subset,subseteq,in,supset,supseteq,leq,le,ge,geq,ni,sqsubset,sqsubseteq,sqsupseteq,sqsupset,to,mapsto,iff,implies,eq,partof,strictpartof\do{\expandafter\absint@liftrel\expandafter{\@temp}}%
-\@for\@temp:=bigunion,bigintersect,bigcup,bigcap,bigsqcup,bigsqcap,forall,exists\do{\expandafter\absint@liftop\expandafter{\@temp}}%
-\@for\@temp:=lnot,emptyset,powerset,N,Z,Q,R,C,Bool,Universe,top,bot,RawEvaluate\do{\expandafter\absint@lift\expandafter{\@temp}}%
+\newif\ifabsint@mathcolor
+
+\def\absint@color{purple}          \def\absint@sharp{\#}
+\def\absint@labelprefix{absint:}   \def\absint@flat{}
+\def\absint@brackets{auto}         \def\absint@subst{assign}
+\newcommand*\absint@op{\mathsf}    \newcommand*\absint@bb{\mathbb}
+\newcommand*\absint@cal{\mathcal}
+
+\DeclareKeys[absint]{
+  color       .store = \absint@color       ,
+  colored     .if    = absint@colored      ,
+  mathcolor   .if    = absint@mathcolor    ,
+  style       .store = \absint@style@      ,
+  links       .if    = absint@links        ,
+  labelprefix .store = \absint@labelprefix ,
+  track       .if    = absint@track        ,
+  sharp       .store = \absint@sharp       ,
+  flat        .store = \absint@flat        ,
+  brackets    .store = \absint@brackets    ,
+  substitution .store = \absint@subst      ,
+  opfont      .store = \absint@op          ,
+  domainfont  .store = \absint@bb          ,
+  calfont     .store = \absint@cal         ,
+  stubs       .if    = absint@stubs        ,
+  shortcut    .code  = {\csdef{#1}{\absexpr}} ,
+  plain       .code  = {\absint@coloredfalse\absint@linksfalse} ,
+  plain       .default:n = true
 }
-\def\endabsint{\endgroup}
-\def\absexpr#1{\ensuremath{\absint#1\endabsint}}
 
+%% A math group with \color is a lot cheaper than \mathcolor; the latter is
+%% only needed to colour the scripts that follow a symbol (`mathcolor').
+\newcommand*\absint@docolor[1]{%
+  \ifabsint@mathcolor
+    \expandafter\absint@mathcolor@\else\expandafter\absint@plaincolor@\fi{#1}}
+\newcommand*\absint@plaincolor@[1]{{\color{\absint@color}#1}}
+\newcommand*\absint@mathcolor@[1]{\mathcolor{\absint@color}{#1}}
+\def\absint@style@#1{% `style' created it, so \def rather than \newcommand
+  \ifabsint@colored\expandafter\absint@docolor\else\expandafter\@firstofone\fi{#1}}
+\newcommand*\absintstyle[1]{\absint@style@{#1}}
+
+\ProcessKeyOptions[absint]
+\newcommand*\absintsetup[1]{\SetKeys[absint]{#1}}
+
+\ifdefstring{\absint@brackets}{stmaryrd}{\RequirePackage{stmaryrd}}{}
+\newcommand*\absint@lbrack{[\mkern-3.2mu[}
+\newcommand*\absint@rbrack{]\mkern-3.2mu]}
+
+%% \bigsqcap exists in stmaryrd and friends only; otherwise turn a \bigsqcup
+%% upside down.
+\newcommand*\absint@bigsqcap@[2]{%
+  \vcenter{\hbox{\rotatebox[origin=c]{180}{$\m@th#1\bigsqcup$}}}}
+\newcommand*\absint@bigsqcap{\mathop{\mathpalette\absint@bigsqcap@\relax}}
+
+%% \absint@stack{<upper>}{<lower>}: two symbols above each other, in the
+%% current style and centred on the math axis.
+\newcommand*\absint@stack[2]{\mathpalette{\absint@stack@{#1}{#2}}\relax}
+\newcommand*\absint@stack@[4]{%
+  \vcenter{\m@th\baselineskip\z@skip\lineskip.2ex\lineskiplimit\maxdimen
+    \ialign{\hfil$#3##$\hfil\cr#1\cr#2\cr}}}
+
+\AtBeginDocument{%
+  \ifcsname bigsqcap\endcsname\let\absint@bigsqcap\bigsqcap\fi
+  \ifdefstring{\absint@brackets}{fallback}{}{%
+    \ifcsname llbracket\endcsname
+      \let\absint@lbrack\llbracket \let\absint@rbrack\rrbracket
+    \fi}%
+  \ifabsint@links\ifcsname hyperref\endcsname\else\absint@linksfalse\fi\fi}
+
+%%% Registry %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Per symbol <n> we store its rendering \absint@code@<n>, its abstract
+%% rendering \absint@abs@<n>, its math class \absint@class@<n>, the symbol
+%% owning its cross reference target \absint@ref@<n>, its description
+%% \absint@desc@<n> and, for lifted symbols, the meaning \<n> had when it was
+%% declared, \absint@orig@<n>.
+
+\newcommand*\absint@symbols{}
+\newcommand*\absint@commands{}
+\newif\ifabsint@ready % has the notation been installed yet?  (see `Names')
+
+\DeclareKeys[absint/symbol]{
+  class    .store = \absint@sym@class ,
+  abstract .store = \absint@sym@abs   ,
+  sharp    .if    = absint@sym@sharp  ,
+  aliases  .store = \absint@sym@alias ,
+  desc     .store = \absint@sym@desc
+}
+\@for\absint@tmp:=ord,bin,rel,op,open,close,punct,inner\do{%
+  \edef\absint@tmp@{\noexpand\DeclareKeys[absint/symbol]%
+    {\absint@tmp .meta:n = {class=\absint@tmp}}}\absint@tmp@}
+
+%% \DeclareAbsintSymbol{<name>}{<meaning>}[<options>], an empty <meaning>
+%% lifting the current meaning of \<name>.
+\NewDocumentCommand\DeclareAbsintSymbol{mmO{}}{%
+  \def\absint@sym@class{ord}\def\absint@sym@abs{}\absint@sym@sharpfalse
+  \def\absint@sym@alias{}\def\absint@sym@desc{}%
+  \SetKeys[absint/symbol]{#3}\absint@declare{#1}{#2}}
+
+\newcommand*\absint@declare[2]{%
+  \ifcsdef{absint@code@#1}{\absint@twice{#1}}{\listgadd\absint@symbols{#1}}%
+  \ifcsname #1\endcsname\csletcs{absint@orig@#1}{#1}\fi
+  \ifblank{#2}{%
+    \ifcsname absint@orig@#1\endcsname
+      \csdef{absint@code@#1}{\csuse{absint@orig@#1}}%
+    \else
+      \PackageError{absint}{Cannot lift the undefined command
+        \expandafter\string\csname#1\endcsname}%
+        {Pass an explicit meaning as the second argument.}%
+    \fi
+  }{\csdef{absint@code@#1}{#2}}%
+  \ifdefempty\absint@sym@abs{%
+    \ifabsint@sym@sharp
+      \csdef{absint@abs@#1}{{\csuse{absint@code@#1}}^{\absint@sharp}}%
+      \csgdef{absint@hasabs@#1}{}%
+    \else\csletcs{absint@abs@#1}{absint@code@#1}\fi
+  }{\csedef{absint@abs@#1}{\unexpanded\expandafter{\absint@sym@abs}}%
+    \csgdef{absint@hasabs@#1}{}}%
+  \ifcsname math\absint@sym@class\endcsname
+    \csletcs{absint@class@#1}{math\absint@sym@class}%
+  \else
+    \PackageError{absint}{Unknown math class `\absint@sym@class' of `#1'}%
+      {Use one of ord, bin, rel, op, open, close, punct and inner.}%
+  \fi
+  \csdef{absint@ref@#1}{#1}%
+  \csedef{absint@desc@#1}{\unexpanded\expandafter{\absint@sym@desc}}%
+  \ifabsint@ready\absint@install@{#1}\fi
+  \ifdefempty\absint@sym@alias{}{%
+    \def\absint@alias@##1{\DeclareAbsintAlias{##1}{#1}}%
+    \expandafter\forcsvlist\expandafter\absint@alias@
+      \expandafter{\absint@sym@alias}}}
+
+\newcommand*\absint@twice[1]{%
+  \PackageWarning{absint}{`#1' is declared twice, using the new one}}
+
+%% \DeclareAbsintAlias{<alias>}{<name>}: a second spelling, sharing the
+%% rendering and the cross reference target of <name>.
+\newcommand*\DeclareAbsintAlias[2]{%
+  \ifcsdef{absint@code@#2}{%
+    \ifcsdef{absint@code@#1}{\absint@twice{#1}}{\listgadd\absint@symbols{#1}}%
+    \def\do##1{\csletcs{absint@##1@#1}{absint@##1@#2}}%
+    \docsvlist{code,abs,class,ref,desc}%
+    \csgdef{absint@isalias@#1}{}\listcsgadd{absint@aliases@#2}{#1}%
+    \ifabsint@ready\absint@install@{#1}\fi
+  }{\PackageError{absint}{Cannot alias the unknown symbol `#2'}%
+     {Declare `#2' with \string\DeclareAbsintSymbol\space first.}}}
+
+%% \DeclareAbsintCommand[<options>]{<name>}[<n>][<default>]{<body>}:
+%% \newcommand for a command that only exists inside absint notation.  The
+%% options are `desc' and `demo', an example used by \absintcommands.
+\DeclareKeys[absint/command]{
+  desc .store = \absint@c@desc ,
+  demo .store = \absint@c@demo
+}
+\newcommand*\DeclareAbsintCommand[2][]{%
+  \def\absint@c@desc{}\def\absint@c@demo{}\SetKeys[absint/command]{#1}%
+  \ifcsdef{absint@cmd@#2}{\absint@twice{#2}}{\listgadd\absint@commands{#2}}%
+  \csedef{absint@cdesc@#2}{\unexpanded\expandafter{\absint@c@desc}}%
+  \csedef{absint@cdemo@#2}{\unexpanded\expandafter{\absint@c@demo}}%
+  \csedef{absint@csrc@#2}{\detokenize\expandafter{\absint@c@demo}}%
+  \ifabsint@ready\absint@installcmd@{#2}\fi
+  \expandafter\DeclareRobustCommand\csname absint@cmd@#2\endcsname}
+
+%%% Rendering %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% The math class is restored explicitly because the styling and the link
+%% would otherwise turn every symbol into an Ord atom and ruin its spacing.
+
+\newif\ifabsint@abstract   % are we in the abstract world?
+\newif\ifabsint@rendering  % guard against nested styling and linking
+
+\newcommand*\absint@use[1]{%
+  \ifabsint@rendering\csuse{absint@code@#1}\else\absint@render{#1}\fi}
+\newcommand*\absint@render[1]{%
+  \absint@track{#1}%
+  \csuse{absint@class@#1}{%
+    \absint@link{#1}{\absintstyle{\absint@renderingtrue\absint@payload{#1}}}}}
+\newcommand*\absint@payload[1]{%
+  \ifabsint@abstract\csuse{absint@abs@#1}\else\csuse{absint@code@#1}\fi}
+
+%% \absint@activation is compiled once (see `Names'), so entering the
+%% notation costs a fixed list of assignments and nothing else.
+\DeclareRobustCommand*\absint{\begingroup\absint@activation}
+\def\endabsint{\endgroup}% \newcommand refuses \end... names
+\DeclareRobustCommand*\absexpr[1]{\ensuremath{\absint#1\endabsint}}
+\DeclareRobustCommand*\absintuse[1]{%
+  \ifcsdef{absint@code@#1}{\ensuremath{\absint@use{#1}}}{\absint@unknown{#1}}}
+\newcommand*\absint@unknown[1]{\PackageWarning{absint}{Unknown symbol `#1'}}
+
+%%% Cross references %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% A symbol only turns into a link if its target really exists, which is what
+%% keeps the undefined reference warnings away.
+
+\newcommand*\absint@labelof[1]{\absint@labelprefix\csuse{absint@ref@#1}}
+\newcommand*\absint@link[2]{%
+  \ifabsint@links
+    \ifcsdef{r@\absint@labelof{#1}}{\hyperref[\absint@labelof{#1}]{#2}}{#2}%
+  \else#2\fi}
+
+\DeclareRobustCommand*\absintmark[1]{\forcsvlist\absint@mark@{#1}\ignorespaces}
+\newcommand*\absint@mark@[1]{%
+  \ifcsdef{absint@code@#1}{%
+    \ifcsdef{absint@marked@#1}{\PackageWarning{absint}{`#1' is marked twice}}{}%
+    \absint@mark@@{#1}%
+  }{\absint@unknown{#1}}}
+%% the same, but silently skipping symbols that already have a target: this
+%% is what \absintlegend uses, so a hand placed \absintmark always wins
+\newcommand*\absint@markonce[1]{\ifcsdef{absint@marked@#1}{}{\absint@mark@@{#1}}}
+\newcommand*\absint@mark@@[1]{%
+  \csgdef{absint@marked@#1}{}%
+  \@bsphack\ifcsname phantomsection\endcsname\phantomsection\fi
+  \label{\absint@labelof{#1}}\@esphack}
+
+%% Used symbols are collected globally and written out in one go at the end,
+%% since writing them where they occur would lose every symbol rendered in a
+%% box that is only measured and thrown away -- as amsmath does in \overset.
+\newcommand*\absint@written{}
+\newcommand*\absint@@used[1]{\csgdef{absint@known@#1}{}}
+\newcommand*\absint@track[1]{%
+  \ifabsint@track
+    \ifcsdef{absint@written@#1}{}{%
+      \csgdef{absint@written@#1}{}%
+      \csgdef{absint@written@\csuse{absint@ref@#1}}{}%
+      \listxadd\absint@written{\csuse{absint@ref@#1}}}%
+  \fi}
+\newcommand*\absint@writeused[1]{\immediate\write\@auxout{\string\absint@@used{#1}}}
+\newif\ifabsint@rerun
+\newcommand*\absint@checkused[1]{%
+  \ifcsdef{absint@isalias@#1}{}{%
+    \ifcsdef{absint@written@#1}%
+      {\ifcsdef{absint@known@#1}{}{\absint@reruntrue}}%
+      {\ifcsdef{absint@known@#1}{\absint@reruntrue}{}}}}
+\AtEndDocument{%
+  \ifabsint@track
+    \if@filesw\forlistloop\absint@writeused\absint@written\fi
+    \forlistloop\absint@checkused\absint@symbols
+    \ifabsint@rerun
+      \PackageWarning{absint}{Symbol usage has changed.  Rerun LaTeX to get
+        the notation legend and the symbol links right}%
+    \fi
+  \fi}
+
+%%% Legend %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% \absintlegend lists the notation used in the document, \absintlegend* all
+%% of it, and both place the cross reference targets on the way.
+
+\newcommand*\absintlegendstart{\begin{description}}
+\newcommand*\absintlegendstop{\end{description}}
+\newcommand*\absintlegendempty{}% nothing to list, e.g. on the very first run
+\newcommand*\absintlegendentry[4]{% symbol, name, description, aliases
+  \item[#1] #2\ifblank{#3}{}{ --- #3}\ifblank{#4}{}{ \textup{(also #4)}}}
+
+\newif\ifabsint@any
+\newcommand*\absint@mode{used}
+\newcommand*\absintlegend{\@ifstar{\absint@legend{all}}{\absint@legend{used}}}
+\newcommand*\absint@legend[1]{%
+  \begingroup
+    \absint@linksfalse \absint@trackfalse \absint@anyfalse \def\absint@mode{#1}%
+    \forlistloop\absint@count@\absint@symbols
+    \ifabsint@any
+      \absintlegendstart\forlistloop\absint@entry@\absint@symbols\absintlegendstop
+    \else\absintlegendempty\fi
+  \endgroup}
+\newcommand*\absint@listed[3]{% <name>{<listed>}{<not listed>}
+  \ifcsdef{absint@isalias@#1}{#3}{%
+    \ifdefstring\absint@mode{all}{#2}{\ifcsdef{absint@known@#1}{#2}{#3}}}}
+\newcommand*\absint@count@[1]{\absint@listed{#1}{\absint@anytrue}{}}
+\newcommand*\absint@entry@[1]{\absint@listed{#1}{\absint@print@{#1}}{}}
+\newcommand*\absint@print@[1]{%
+  \ifcsdef{absint@aliases@#1}%
+    {\absint@print@@{#1}{\absint@showaliases{#1}}}{\absint@print@@{#1}{}}}
+\newcommand*\absint@print@@[2]{%
+  \absintlegendentry{\absint@markonce{#1}\absint@showsymbol{#1}}%
+    {\absintname{#1}}{\csuse{absint@desc@#1}}{#2}}
+
+\newcommand*\absintname[1]{\texttt{\symbol{92}#1}}
+\newcommand*\absint@showsymbol[1]{% concrete, and abstract if it differs
+  \ensuremath{\absint@raw{absint@code@#1}{#1}%
+    \ifcsdef{absint@hasabs@#1}{,\;\absint@raw{absint@abs@#1}{#1}}{}}}
+\newcommand*\absint@raw[2]{%
+  \csuse{absint@class@#2}{\absintstyle{\absint@renderingtrue\csuse{#1}}}}
+\newcommand*\absint@showaliases[1]{%
+  \begingroup
+    \def\absint@sep{}%
+    \def\do##1{\absint@sep\absintname{##1}\def\absint@sep{,\space}}%
+    \forlistcsloop\do{absint@aliases@#1}%
+  \endgroup}
+
+%% \absintcommands lists the commands, reusing the legend hooks: the
+%% rendered example, the name, the description and the source of the example.
+\newcommand*\absintdemo[1]{\texttt{#1}}
+\newcommand*\absintcommands{%
+  \begingroup
+    \absint@linksfalse \absint@trackfalse
+    \absintlegendstart
+    \forlistloop\absint@centry@\absint@commands
+    \absintlegendstop
+  \endgroup}
+\newcommand*\absintcommandentry[4]{% example, name, description, source
+  \item[#1] #2\ifblank{#3}{}{ --- #3}\ifblank{#4}{}{ \textup{(#4)}}}
+\newcommand*\absint@centry@[1]{%
+  \absintcommandentry{\absexpr{\csuse{absint@cdemo@#1}}}{\absintname{#1}}%
+    {\csuse{absint@cdesc@#1}}{\absint@showdemo{#1}}}
+\newcommand*\absint@showdemo[1]{\absintdemo{\csuse{absint@csrc@#1}}}
+
+%% for documents that want to walk the notation themselves
+\newcommand*\absintforallsymbols[1]{\forlistloop#1\absint@symbols}
+\newcommand*\absintforallcommands[1]{\forlistloop#1\absint@commands}
+\newcommand*\absintapi{%
+  absexpr,absint,endabsint,absintuse,absintmark,absintsetup,absintstyle,%
+  absintlegend,absintcommands,absintdemo,absintlegendstart,absintlegendstop,%
+  absintlegendentry,absintlegendempty,absintcommandentry,absintname,%
+  absintforallsymbols,%
+  absintforallcommands,DeclareAbsintSymbol,DeclareAbsintAlias,%
+  DeclareAbsintCommand}
+
+%%% Concrete and abstract %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% \begingroup is used on purpose: unlike {...} it does not turn the content
+%% into an Ord atom, so the spacing of the relations inside stays intact.
+
+\DeclareAbsintCommand[desc={switch to the abstract world},
+  demo={\abstractly{a \lub b}}]{abstractly}[1]{%
+    \begingroup\absint@abstracttrue#1\endgroup}
+\DeclareAbsintCommand[desc={switch to the concrete world},
+  demo={\concretely{a \lub b}}]{concretely}[1]{%
+    \begingroup\absint@abstractfalse#1\endgroup}
+\DeclareAbsintCommand[desc={the abstraction mark}, demo={X\isAbstract}]%
+  {isAbstract}{^{\absintstyle{\absint@sharp}}}
+\DeclareAbsintCommand[desc={the concretion mark}, demo={X\isConcrete}]%
+  {isConcrete}{\ifdefempty\absint@flat{}{^{\absintstyle{\absint@flat}}}}
+\DeclareAbsintCommand[desc={mark one object as abstract}, demo={\abstract{X}}]%
+  {abstract}[1]{{#1}\absint@cmd@isAbstract}
+\DeclareAbsintCommand[desc={mark one object as concrete}, demo={\concrete{X}}]%
+  {concrete}[1]{{#1}\absint@cmd@isConcrete}
+
+%%% The notation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% Logic
+\DeclareAbsintSymbol {lnot}     {}                 [desc={negation}, aliases={neg}]
+\DeclareAbsintSymbol {land}     {}                 [bin, desc={conjunction}, aliases={wedge}]
+\DeclareAbsintSymbol {lor}      {}                 [bin, desc={disjunction}, aliases={vee}]
+\DeclareAbsintSymbol {implies}  {}                 [rel, desc={implication}]
+\DeclareAbsintSymbol {iff}      {}                 [rel, desc={bi-implication}]
+\DeclareAbsintSymbol {forall}   {}                 [op,  desc={universal quantifier}]
+\DeclareAbsintSymbol {exists}   {}                 [op,  desc={existential quantifier}]
+\DeclareAbsintSymbol {nexists}  {}                 [op,  desc={there is no}]
+\DeclareAbsintSymbol {eq}       {=}                [rel, desc={equality}]
+\DeclareAbsintSymbol {neq}      {}                 [rel, desc={inequality}]
+\DeclareAbsintSymbol {defeq}    {\overset{\absint@op{def}}{=}}
+                                                   [rel, desc={equality by definition}]
+
+%% Sets
+\DeclareAbsintSymbol {emptyset} {\varnothing}      [desc={the empty set}]
+\DeclareAbsintSymbol {in}       {}                 [rel, desc={membership}]
+\DeclareAbsintSymbol {notin}    {}                 [rel, desc={non-membership}]
+\DeclareAbsintSymbol {ni}       {}                 [rel, desc={contains}]
+\DeclareAbsintSymbol {subset}   {}                 [rel, desc={strict subset}]
+\DeclareAbsintSymbol {subseteq} {}                 [rel, desc={subset}]
+\DeclareAbsintSymbol {supset}   {}                 [rel, desc={strict superset}]
+\DeclareAbsintSymbol {supseteq} {}                 [rel, desc={superset}]
+\DeclareAbsintSymbol {cup}      {}                 [bin, sharp, desc={union}, aliases={union}]
+\DeclareAbsintSymbol {cap}      {}                 [bin, sharp, desc={intersection}, aliases={intersect}]
+\DeclareAbsintSymbol {setminus} {}                 [bin, desc={set difference}]
+\DeclareAbsintSymbol {times}    {}                 [bin, desc={cartesian product}]
+\DeclareAbsintSymbol {bigcup}   {}                 [op,  sharp, desc={union of a family}, aliases={bigunion}]
+\DeclareAbsintSymbol {bigcap}   {}                 [op,  sharp, desc={intersection of a family}, aliases={bigintersect}]
+\DeclareAbsintSymbol {powerset} {\absint@cal{P}}   [sharp, desc={powerset}, aliases={P}]
+\DeclareAbsintSymbol {finpowerset} {\absint@cal{P}_{\absint@op{fin}}}
+                                                   [desc={powerset restricted to the finite subsets}]
+
+%% Orders and lattices
+\DeclareAbsintSymbol {sqsubseteq} {}               [rel, sharp, desc={partial order}, aliases={partof}]
+\DeclareAbsintSymbol {sqsubset} {}                 [rel, sharp, desc={strict partial order}, aliases={strictpartof}]
+\DeclareAbsintSymbol {sqsupseteq} {}               [rel, sharp, desc={inverse partial order}]
+\DeclareAbsintSymbol {sqsupset} {}                 [rel, sharp, desc={strict inverse partial order}]
+\DeclareAbsintSymbol {leq}      {}                 [rel, desc={less than or equal}, aliases={le}]
+\DeclareAbsintSymbol {geq}      {}                 [rel, desc={greater than or equal}, aliases={ge}]
+\DeclareAbsintSymbol {sqcup}    {}                 [bin, sharp, desc={least upper bound (join)}, aliases={lub,join}]
+\DeclareAbsintSymbol {sqcap}    {}                 [bin, sharp, desc={greatest lower bound (meet)}, aliases={glb,meet}]
+\DeclareAbsintSymbol {bigsqcup} {}                 [op,  sharp, desc={least upper bound of a family}, aliases={Lub,Join}]
+\DeclareAbsintSymbol {bigsqcap} {\absint@bigsqcap} [op,  sharp, desc={greatest lower bound of a family}, aliases={Glb,Meet}]
+\DeclareAbsintSymbol {top}      {}                 [sharp, desc={greatest element}]
+\DeclareAbsintSymbol {bot}      {}                 [sharp, desc={least element}]
+\DeclareAbsintSymbol {widen}    {\nabla}           [bin, sharp, desc={widening}]
+\DeclareAbsintSymbol {narrow}   {\triangle}        [bin, sharp, desc={narrowing}]
+
+%% Functions
+\DeclareAbsintSymbol {to}       {}                 [rel, desc={function space}]
+\DeclareAbsintSymbol {mapsto}   {}                 [rel, desc={maps to}]
+\DeclareAbsintSymbol {monoto}   {\overset{\absint@op{m}}{\absint@orig@to}}
+                                                   [rel, desc={monotone function space}]
+\DeclareAbsintSymbol {compose}  {\circ}            [bin, desc={function composition}]
+\DeclareAbsintSymbol {id}       {\absint@op{id}}   [op,  desc={the identity function}]
+\DeclareAbsintSymbol {dom}      {\absint@op{dom}}  [op,  desc={domain of a function}]
+\DeclareAbsintSymbol {codom}    {\absint@op{codom}}[op,  desc={codomain of a function}]
+\DeclareAbsintSymbol {lfp}      {\absint@op{lfp}}  [op,  desc={least fixpoint}]
+\DeclareAbsintSymbol {gfp}      {\absint@op{gfp}}  [op,  desc={greatest fixpoint}]
+\DeclareAbsintSymbol {Fix}      {\absint@op{Fix}}  [op,  desc={the fixpoints of a function}]
+
+%% Abstraction
+\DeclareAbsintSymbol {abstraction}    {\alpha}     [desc={abstraction function}, aliases={abstr}]
+\DeclareAbsintSymbol {concretization} {\gamma}     [desc={concretization function}, aliases={concr}]
+\DeclareAbsintSymbol {galois}   {\mathop{\rightleftarrows}\limits^{\alpha}_{\gamma}}
+                                                   [rel, desc={Galois connection}]
+\DeclareAbsintSymbol {galoisinsertion}
+  {\mathop{\absint@stack{\rightarrow}{\twoheadleftarrow}}\limits^{\alpha}_{\gamma}}
+                                                   [rel, desc={Galois insertion}]
+\DeclareAbsintSymbol {abstractmark}   {\absint@sharp} [desc={the abstraction mark}]
+
+%% Domains
+\DeclareAbsintSymbol {N}        {\absint@bb{N}}    [desc={the natural numbers}]
+\DeclareAbsintSymbol {Z}        {\absint@bb{Z}}    [desc={the integers}]
+\DeclareAbsintSymbol {Q}        {\absint@bb{Q}}    [desc={the rationals}]
+\DeclareAbsintSymbol {R}        {\absint@bb{R}}    [desc={the reals}]
+\DeclareAbsintSymbol {C}        {\absint@bb{C}}    [desc={the complex numbers}]
+\DeclareAbsintSymbol {Bool}     {\absint@bb{B}}    [desc={the booleans}]
+\DeclareAbsintSymbol {Universe} {\absint@bb{U}}    [sharp, desc={the universe}]
+\DeclareAbsintSymbol {Variables}{\absint@bb{V}}    [sharp, desc={the variables}]
+\DeclareAbsintSymbol {NumericDomain}  {\absint@bb{I}}  [sharp, desc={a numeric domain}]
+\DeclareAbsintSymbol {BooleanDomain}  {\absint@bb{B}}  [sharp, desc={a boolean domain}]
+\DeclareAbsintSymbol {IntervalDomain} {\absint@cal{I}} [sharp, desc={the interval domain}]
+\DeclareAbsintSymbol {SetOfStates}    {\absint@cal{D}} [sharp, desc={the states}]
+\DeclareAbsintSymbol {Environments}   {\absint@cal{E}} [sharp, desc={the environments}]
+\DeclareAbsintSymbol {Environment}    {\rho}           [sharp, desc={an environment}]
+
+%% Operators
+\DeclareAbsintSymbol {AnyOp}      {\diamond}      [bin, sharp, desc={an arbitrary operator}]
+\DeclareAbsintSymbol {AnyCompare} {\bowtie}       [rel, sharp, desc={an arbitrary comparison}]
+\DeclareAbsintSymbol {intadd}     {\oplus}        [bin, sharp, desc={addition in a domain}]
+\DeclareAbsintSymbol {intsub}     {\ominus}       [bin, sharp, desc={subtraction in a domain}, aliases={intneg}]
+\DeclareAbsintSymbol {intmul}     {\otimes}       [bin, sharp, desc={multiplication in a domain}]
+\DeclareAbsintSymbol {intdiv}     {\oslash}       [bin, sharp, desc={division in a domain}]
+\DeclareAbsintSymbol {intmod}     {\odot}         [bin, sharp, desc={modulo in a domain}]
+
+%% Semantics
+\DeclareAbsintSymbol {RawEvaluateExpr}      {\absint@bb{E}} [sharp, desc={expression semantics}]
+\DeclareAbsintSymbol {RawEvaluateCond}      {\absint@bb{C}} [sharp, desc={condition semantics}]
+\DeclareAbsintSymbol {RawEvaluateStatement} {\absint@bb{S}} [sharp, desc={statement semantics}]
+
+\DeclareAbsintCommand[desc={by definition}, demo={a \asdef\eq b}]%
+  {asdef}[1]{\overset{\absintstyle{\absint@op{def}}}{#1}}
+\DeclareAbsintCommand[desc={semantic brackets}, demo={\semantics{e}}]%
+  {semantics}[1]{\absintstyle{\absint@lbrack}\,#1\,\absintstyle{\absint@rbrack}}
+\DeclareAbsintCommand[desc={expression semantics},
+  demo={\EvaluateExpr{e}\Environment}]%
+  {EvaluateExpr}[1]{\RawEvaluateExpr\absint@cmd@semantics{#1}}
+\DeclareAbsintCommand[desc={condition semantics},
+  demo={\EvaluateCond{b}\Environment}]%
+  {EvaluateCond}[1]{\RawEvaluateCond\absint@cmd@semantics{#1}}
+\DeclareAbsintCommand[desc={statement semantics},
+  demo={\EvaluateStatement{s}\Environment}]%
+  {EvaluateStatement}[1]{\RawEvaluateStatement\absint@cmd@semantics{#1}}
+\DeclareAbsintCommand[desc={a set, \string\Given\space or \string\For\space
+  as the separator}, demo={\Set{x \in \N \Given x \leq 3}}]%
+  {Set}[1]{%
+    \bgroup\def\For{\;\middle|\;}\let\Given\For\left\{\,#1\,\right\}\egroup}
+\DeclareAbsintCommand[desc={a tuple}, demo={\Tuple{a, b}}]%
+  {Tuple}[1]{\left\langle\,#1\,\right\rangle}
+\DeclareAbsintCommand[desc={cardinality}, demo={\card{X}}]%
+  {card}[1]{\left\lvert#1\right\rvert}
+\DeclareAbsintCommand[desc={an interval}, demo={\Interval{a}{b}}]%
+  {Interval}[2]{\left[\,#1,#2\,\right]}
+\DeclareAbsintCommand[desc={restriction of a function}, demo={\restrict{f}{S}}]%
+  {restrict}[2]{\left.#1\right|_{#2}}
+\DeclareAbsintCommand[desc={update of an environment},
+  demo={\envupdate{\Environment}{x}{v}}]{envupdate}[3]{#1[#2\mapsto#3]}
+\DeclareAbsintCommand[desc={lookup in an environment},
+  demo={\envlookup{\Environment}{x}}]{envlookup}[2]{#1(#2)}
+\DeclareAbsintCommand[desc={a Galois connection},
+  demo={\galoisbetween{\Z}{\NumericDomain}}]%
+  {galoisbetween}[2]{#1\absint@use{galois}#2}
+
+%%% Lambda calculus %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\DeclareAbsintSymbol {lambda}   {}                 [desc={abstraction}]
+\DeclareAbsintSymbol {tylam}    {\Lambda}          [desc={type abstraction}]
+\DeclareAbsintSymbol {app}      {\,}               [desc={application}]
+\DeclareAbsintSymbol {redto}    {\longrightarrow}  [rel, desc={reduces to}]
+\DeclareAbsintSymbol {redtos}   {\twoheadrightarrow} [rel, desc={reduces to in many steps}]
+\DeclareAbsintSymbol {betared}  {\longrightarrow_{\beta}} [rel, desc={beta reduction}]
+\DeclareAbsintSymbol {betareds} {\twoheadrightarrow_{\beta}} [rel, desc={beta reduction in many steps}]
+\DeclareAbsintSymbol {betaeq}   {=_{\beta}}        [rel, desc={beta equality}]
+\DeclareAbsintSymbol {etared}   {\longrightarrow_{\eta}} [rel, desc={eta reduction}]
+\DeclareAbsintSymbol {etaeq}    {=_{\eta}}         [rel, desc={eta equality}]
+\DeclareAbsintSymbol {alphaeq}  {=_{\alpha}}       [rel, desc={alpha equality}]
+\DeclareAbsintSymbol {deltared} {\longrightarrow_{\delta}} [rel, desc={delta reduction}]
+\DeclareAbsintSymbol {evalto}   {\Downarrow}       [rel, desc={evaluates to}]
+\DeclareAbsintSymbol {types}    {\vdash}           [rel, desc={entails}, aliases={entails}]
+\DeclareAbsintSymbol {hastype}  {:}                [rel, desc={has type}]
+\DeclareAbsintSymbol {subtype}  {{<}\mkern-2mu{:}} [rel, sharp, desc={subtype of}]
+\DeclareAbsintSymbol {LambdaTerms} {\Lambda}       [desc={the lambda terms}]
+\DeclareAbsintSymbol {TypeSet}  {\absint@cal{T}}   [sharp, desc={the types}]
+\DeclareAbsintSymbol {Context}  {\Gamma}           [sharp, desc={a typing context}]
+\DeclareAbsintSymbol {emptyctx} {\cdot}            [desc={the empty context}]
+\DeclareAbsintSymbol {hole}     {[\,]}             [desc={the hole of a context}]
+\DeclareAbsintSymbol {combI}    {\absint@op{I}}    [desc={the I combinator}]
+\DeclareAbsintSymbol {combK}    {\absint@op{K}}    [desc={the K combinator}]
+\DeclareAbsintSymbol {combS}    {\absint@op{S}}    [desc={the S combinator}]
+\DeclareAbsintSymbol {combY}    {\absint@op{Y}}    [desc={the Y combinator}]
+
+\DeclareAbsintCommand[desc={an abstraction}, demo={\lam{x}{x \app x}}]%
+  {lam}[2]{\absint@use{lambda}#1.\,#2}
+\DeclareAbsintCommand[desc={a typed abstraction},
+  demo={\lamty{x}{\TypeSet}{x}}]%
+  {lamty}[3]{\absint@use{lambda}#1\absint@use{hastype}#2.\,#3}
+\DeclareAbsintCommand[desc={a type abstraction}, demo={\tyabs{X}{M}}]%
+  {tyabs}[2]{\absint@use{tylam}#1.\,#2}
+\DeclareAbsintCommand[desc={a universal type}, demo={\forallty{X}{X \to X}}]%
+  {forallty}[2]{\absint@use{forall}#1.\,#2}
+\DeclareAbsintCommand[desc={a substitution, see the `substitution' option},
+  demo={\subst{M}{x}{N}}]%
+  {subst}[3]{#1[\ifdefstring\absint@subst{slash}{#3/#2}{#2\mathrel{:=}#3}]}
+\DeclareAbsintCommand[desc={the free variables}, demo={\FV{M}}]%
+  {FV}[1]{\absint@op{FV}(#1)}
+\DeclareAbsintCommand[desc={the bound variables}, demo={\BV{M}}]%
+  {BV}[1]{\absint@op{BV}(#1)}
+\DeclareAbsintCommand[desc={a Church numeral}, demo={\church{3}}]%
+  {church}[1]{\overline{#1}}
+\DeclareAbsintCommand[desc={a typing judgement},
+  demo={\typing{\Context}{M}{\TypeSet}}]%
+  {typing}[3]{#1\absint@use{types}#2\absint@use{hastype}#3}
+\DeclareAbsintCommand[desc={a context extended by a binding},
+  demo={\ctxadd{\Context}{x}{\TypeSet}}]%
+  {ctxadd}[3]{#1, #2\absint@use{hastype}#3}
+\DeclareAbsintCommand[desc={a context with its hole filled},
+  demo={\ctxfill{C}{M}}]{ctxfill}[2]{#1[#2]}
+
+%%% Names %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Every name is made available in one of two ways.  A name that is still
+%% free at the beginning of the document is defined globally (`stubs'), which
+%% also makes \lub and friends work in plain math mode and lets the notation
+%% survive a moving argument -- without it \absexpr{\Glb S} in a \section
+%% would expand \Glb while it is written to the .toc file.  A name that is
+%% taken is compiled into \absint@activation instead, so that only \absexpr
+%% and the absint environment see it.
+
+\newcommand*\absint@activation{}
+
+\newcommand*\absint@stub@[1]{%
+  \expandafter\protected\expandafter\gdef\csname #1\endcsname
+    {\ensuremath{\absint@use{#1}}}}
+\newcommand*\absint@install@[1]{%
+  \ifboolexpr{ bool {absint@stubs} and not test {\ifcsdef{#1}} }%
+    {\absint@stub@{#1}}{\absint@compile{#1}{\noexpand\absint@use{#1}}}}
+%% Indirect on purpose: a command declared in the document body installs its
+%% name before \DeclareRobustCommand gets to define it.
+\newcommand*\absint@stubcmd@[1]{%
+  \begingroup\edef\absint@x{\endgroup
+    \noexpand\protected\noexpand\gdef\expandafter\noexpand\csname #1\endcsname
+      {\expandafter\noexpand\csname absint@cmd@#1\endcsname}}%
+  \absint@x}
+\newcommand*\absint@installcmd@[1]{%
+  \ifboolexpr{ bool {absint@stubs} and not test {\ifcsdef{#1}} }%
+    {\absint@stubcmd@{#1}}%
+    {\absint@compile{#1}{\expandafter\noexpand\csname absint@cmd@#1\endcsname}}}
+
+%% \absint@compile{<name>}{<meaning>}: append \def\<name>{<meaning>} to
+%% \absint@activation, with the control sequence built once and for all.
+\newcommand*\absint@compile[2]{%
+  \begingroup\edef\absint@x{\endgroup
+    \noexpand\gappto\noexpand\absint@activation{%
+      \noexpand\def\expandafter\noexpand\csname #1\endcsname{#2}}}%
+  \absint@x}
+
+\newcommand*\absint@strip@[1]{\csdef{#1}{}}
+\newcommand*\absint@stripall{%
+  \forlistloop\absint@strip@\absint@symbols
+  \forlistloop\absint@strip@\absint@commands}
+
+\AtBeginDocument{%
+  \forlistloop\absint@install@\absint@symbols
+  \forlistloop\absint@installcmd@\absint@commands
+  \absint@readytrue
+  %% notation cannot be rendered in a PDF bookmark, so strip it there
+  \ifcsname pdfstringdefDisableCommands\endcsname
+    \pdfstringdefDisableCommands{%
+      \let\absexpr\@firstofone \let\absintuse\@gobble \let\absintmark\@gobble
+      \let\absint\@empty \let\endabsint\@empty \absint@stripall}%
+  \fi}
 
 \endinput

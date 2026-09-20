@@ -1,22 +1,70 @@
 \input{_common-preamble.tex}
 \usepackage{mathtools}
-\usepackage{../absint}
+\usepackage{absint}
 
 \begin{document}
-Hey! This is: \absintmark{lor}\absexpr{\lor}. \absintmark{iff}\absexpr{\iff}.
+Hey! This is: \absexpr{\lor}. \absexpr{\iff}.
+Every symbol links to its entry in the legend at the end of this document.
 
 \absexpr{a \lor b \asdef\iff c \eq 3 \asdef\eq 4}\\
 \(a \lor b \iff c\)
 
-Lattice: A lattice \absexpr{(X, \sqsubseteq, \sqcup, \sqcap)} is a poset (partially ordered set), such that \absexpr{\forall a, b \in X: a \sqcup b} and \absexpr{a \sqcap b} exist (Mine).
+Lattice: A lattice \absexpr{(X, \partof, \lub, \glb)} is a poset (partially ordered set), such that \absexpr{\forall a, b \in X: a \lub b} and \absexpr{a \glb b} exist (Mine).
 
-Complete Lattice: A complete lattice \absexpr{(X, \sqsubseteq, \sqcup, \sqcap, \bot, \top)} is a lattice, such that
+Complete Lattice: A complete lattice \absexpr{(X, \partof, \lub, \glb, \bot, \top)} is a lattice, such that
 \begin{enumerate}[nosep]
-   \item \absexpr{\forall S \subseteq X: \bigsqcup S} and \absexpr{\bigsqcap S} exist.
+   \item \absexpr{\forall S \subseteq X: \Lub S} and \absexpr{\Glb S} exist.
    \item \absexpr{X} has a least element \absexpr{\bot} and a greatest element \absexpr{\top}.
 \end{enumerate}
 
-For any set \absexpr{X}, the powerset \absexpr{(\powerset(X), \subseteq, \cup, \cap, \emptyset, X)} is a complete lattice.
+For any set \absexpr{X}, the powerset \absexpr{(\powerset(X), \subseteq, \union, \intersect, \emptyset, X)} is a complete lattice.
 
 Lets write a fancy \absexpr{\partof_b} or \absexpr{R \glb_b X, \glb_b} or \absexpr{\lub_\#}!
+
+\section{Concrete and abstract}
+Single objects are marked with \verb|\abstract| and \verb|\concrete|:
+\absexpr{\abstract{X} \partof \concrete{Y}}.
+Whole expressions switch worlds with \verb|\abstractly| and \verb|\concretely|:
+\absexpr{\concretely{(X, \partof, \lub, \glb, \bot, \top)}} becomes
+\absexpr{\abstractly{(X, \partof, \lub, \glb, \bot, \top)}}, and
+\absexpr{\abstractly{\Lub_{i \in \N} X_i \partof \widen}} keeps the mark on
+the operators that have one.
+
+A Galois connection \absexpr{\galoisbetween{\powerset(\Z)}{\NumericDomain}}
+and a Galois insertion \absexpr{\powerset(\Z) \galoisinsertion \NumericDomain}
+relate the two worlds via \absexpr{\abstraction} and \absexpr{\concretization},
+with \absexpr{\abstraction \compose \concretization \partof \id}.
+
+\section{Semantics}
+\absexpr{\EvaluateExpr{x + 1}\Environment \eq \envlookup{\Environment}{x} \intadd 1}
+for an environment \absexpr{\Environment \in \Environments \eq \Variables \to \NumericDomain},
+and \absexpr{\abstractly{\EvaluateStatement{s}} \compose \abstraction \partof \abstraction \compose \EvaluateStatement{s}}.
+
+The fixpoint of a statement is \absexpr{\lfp_{\bot} f \eq \Lub_{i \in \N} f^i(\bot)},
+its abstract counterpart is \absexpr{\abstractly{\lfp_{\bot} f}} and it is reached
+with a widening \absexpr{a \widen b} and a narrowing \absexpr{a \narrow b}.
+
+\section{Sets}
+\absexpr{\Set{x \in \N \Given x \leq 3} \union \Set{4}}, \absexpr{\card{X}},
+\absexpr{\Tuple{a, b}}, \absexpr{\Interval{a}{b}}, \absexpr{\restrict{f}{S}},
+\absexpr{\envupdate{\Environment}{x}{v}}.
+
+\section{Lambda calculus}
+\absexpr{(\lam{x}{M}) \app N \betared \subst{M}{x}{N}} and
+\absexpr{\lam{x}{M \app x} \etared M} if \absexpr{x \notin \FV{M}}.
+The fixpoint combinator unfolds as \absexpr{\combY \app f \betareds f \app (\combY \app f)},
+and \absexpr{\combS \app \combK \app \combK \betaeq \combI}.
+Church numerals: \absexpr{\church{3} \alphaeq \lam{f\,x}{f \app (f \app (f \app x))}}.
+
+Typing: \absexpr{\typing{\ctxadd{\Context}{x}{\sigma}}{M}{\tau} \implies \typing{\Context}{\lam{x}{M}}{\sigma \to \tau}},
+polymorphism: \absexpr{\tyabs{X}{\lamty{x}{X}{x}} \hastype \forallty{X}{X \to X}},
+big steps: \absexpr{\emptyctx \types M \evalto v}, and evaluation contexts:
+\absexpr{\ctxfill{C}{\hole}}.
+
+\section{Outside of absint notation}
+Symbols whose name is still free also work in plain math mode:
+\(a \lub b \partof \top\), or with \verb|\absintuse|: \absintuse{widen}.
+
+\section{Notation}
+\absintlegend
 \end{document}

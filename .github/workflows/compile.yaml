@@ -1,0 +1,40 @@
+name: compile the documentation
+'on':
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout git repository
+      uses: actions/checkout@v4
+      with:
+        submodules: true
+    - name: Compile the documentation
+      uses: xu-cheng/latex-action@v3
+      with:
+        working_directory: doc
+        root_file: absint.tex
+    - name: Compile the examples
+      uses: xu-cheng/latex-action@v3
+      with:
+        working_directory: examples
+        root_file: absint.tex
+    - name: Commit
+      if: github.event_name == 'push'
+      run: |
+        cp doc/build/absint.pdf absint-doc.pdf
+        cp examples/build/absint.pdf absint-examples.pdf
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add -f "absint-doc.pdf" "absint-examples.pdf"
+        git commit -m "Newly compiled data"
+    - name: Push changes
+      if: github.event_name == 'push'
+      run: git push --force origin HEAD:gh-pages
